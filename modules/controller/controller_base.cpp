@@ -186,32 +186,34 @@ void ControllerBase::step(
             else                               ++outward_active;
         }
 
-        if (outward_active == 0 && outward_sk == 0) {
-            if (outward_returning > 0) {
-                // Return phase: every outward drone we're relaying for is
-                // in transit, no boundary anchor is in place yet.  Hold
-                // position so the chain stays intact -- if we let the
-                // attraction logic run (it skips returning drones) the
-                // only attractor would be the base, dragging the helper
-                // inward and collapsing the chain mid-return.
-                m_no_outward_ticks = 0;
-                velocity_actuator->brake();
-                neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
-                return;
-            }
-            // No outward neighbors at all (all SK gone out of range, or
-            // never had any).  Auto-deactivate after a short debounce so a
-            // future HELP_PROXY can re-arm us via Ns3Drone::startMission().
-            if (++m_no_outward_ticks >= HELPER_IDLE_DEACTIVATE_TICKS) {
-                mission_active = false;
-                m_no_outward_ticks = 0;
-                velocity_actuator->brake();
-                neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
-                return;
-            }
-        } else {
+        if (outward_active == 0 && outward_returning == 0) {
+            // No drone left that needs us as a relay -- either they have
+            // all reached SK or they aged out of our neighbor list.  Stop
+            // the mission and stay put exactly where we are.  Running the
+            // attraction law here would just chase a moving SK centroid
+            // forever (sub-meter offsets exceed the 1e-6 N brake
+            // threshold), which manifests as visible twitching in the
+            // animation.  A future HELP_PROXY will re-arm us via
+            // Ns3Drone::startMission().
+            mission_active = false;
             m_no_outward_ticks = 0;
+            velocity_actuator->brake();
+            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
+            return;
         }
+        if (outward_active == 0 && outward_returning > 0) {
+            // Return phase: every outward drone we're relaying for is
+            // in transit, no boundary anchor is in place yet.  Hold
+            // position so the chain stays intact -- if we let the
+            // attraction logic run (it skips returning drones) the
+            // only attractor would be the base, dragging the helper
+            // inward and collapsing the chain mid-return.
+            m_no_outward_ticks = 0;
+            velocity_actuator->brake();
+            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
+            return;
+        }
+        m_no_outward_ticks = 0;
     }
 
     Vector3D F_tot{0.0f, 0.0f, 0.0f};
