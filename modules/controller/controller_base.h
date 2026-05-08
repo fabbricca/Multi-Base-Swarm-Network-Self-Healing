@@ -79,4 +79,13 @@ class ControllerBase : public ControllerInterface {
         Vector3D idle_velocity{0.5f, 0.0f, 0.0f};
 
         static constexpr float RETURN_K_ATT_SCALE = 0.3f;
+
+        // Helper auto-deactivation: count consecutive ticks during which
+        // every outward neighbor is either station-keeping (returned and
+        // settled) or no longer in the neighbor list.  When this counter
+        // crosses HELPER_IDLE_DEACTIVATE_TICKS, the helper sets
+        // mission_active=false and brakes -- a future HELP_PROXY will
+        // re-arm it via Ns3Drone::startMission().
+        uint32_t m_no_outward_ticks = 0;
+        static constexpr uint32_t HELPER_IDLE_DEACTIVATE_TICKS = 20;  // ~1 s @ 20 Hz
 };

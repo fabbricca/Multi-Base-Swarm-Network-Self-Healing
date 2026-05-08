@@ -88,7 +88,7 @@ void ControllerBase::step(
     if (m_station_keeping) {
         velocity_actuator->brake();
         position->retrieveCurrentPosition();
-        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false);
+        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
         return;
     }
 
@@ -118,7 +118,7 @@ void ControllerBase::step(
 
         if (!has_attractor) {
             velocity_actuator->brake();
-            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/true);
+            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/true, /*station_keeping=*/false);
             return;
         }
 
@@ -126,7 +126,7 @@ void ControllerBase::step(
         computeVelocityCommand(F_tot, &new_acceleration);
         velocity_actuator->applyVelocity(new_acceleration, V_max);
 
-        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/true);
+        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/true, /*station_keeping=*/false);
         return;
     }
 
@@ -138,13 +138,58 @@ void ControllerBase::step(
         const bool is_hop1 = (my_hops == 1);
         if (!is_hop1) {
             position->retrieveCurrentPosition();
-            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false);
+            neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
         }
         return;
     }
 
     const auto neighbors = neighbor_manager->getNeighbors();
     position->retrieveCurrentPosition();
+
+    // Helper auto-deactivation: count outward neighbors (hops > my_hops or
+    // genuinely lost) that are NOT yet station-keeping.  Returning drones
+    // still count -- they need the relay chain we form during their
+    // return.  Once every drone we were helping has reached direct
+    // coverage and switched to station-keeping (or aged out of our
+    // neighbor list), our relay job is done -- brake and clear
+    // mission_active so a future HELP_PROXY can re-arm us.
+    //
+    // This is the cleanup that lets returned drones truthfully report
+    // hops=1: helpers that would otherwise see them as same-hop peers
+    // (and skip them, collapsing toward the base) are now off-mission and
+    // simply hold position.
+    //
+    // Skip the check during the startup window where we don't yet have a
+    // flood-derived hop count -- otherwise we'd deactivate before the
+    // first relay chain even forms.
+    if (my_hops != UINT8_MAX) {
+        size_t outward_active = 0;
+        for (const NeighborInfoInterface* n : neighbors) {
+            if (n->getIsStationKeeping()) continue;  // returned and settled
+            const uint8_t nh = (nearest_base == UINT8_MAX)
+                ? n->getMinHopsToAnyBase()
+                : n->getHopsToBase(nearest_base);
+            if (nh == UINT8_MAX) {
+                // Genuinely lost (no path to any base) -- definitely
+                // someone we should still be helping.  A neighbor attached
+                // to another base's swarm is excluded.
+                if (n->getMinHopsToAnyBase() == UINT8_MAX) ++outward_active;
+                continue;
+            }
+            if (my_hops != UINT8_MAX && nh > my_hops) ++outward_active;
+        }
+        if (outward_active == 0) {
+            if (++m_no_outward_ticks >= HELPER_IDLE_DEACTIVATE_TICKS) {
+                mission_active = false;
+                m_no_outward_ticks = 0;
+                velocity_actuator->brake();
+                neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
+                return;
+            }
+        } else {
+            m_no_outward_ticks = 0;
+        }
+    }
 
     Vector3D F_tot{0.0f, 0.0f, 0.0f};
     accumulateAttractive(neighbors, nearest_base, my_hops, position, F_tot);
@@ -158,7 +203,7 @@ void ControllerBase::step(
 
     if (neighbors.empty() || F_tot.module() < 1e-6f) {
         velocity_actuator->brake();
-        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false);
+        neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
         return;
     }
 
@@ -166,5 +211,5 @@ void ControllerBase::step(
     computeVelocityCommand(F_tot, &new_acceleration);
     velocity_actuator->applyVelocity(new_acceleration, V_max);
 
-    neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false);
+    neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
 }

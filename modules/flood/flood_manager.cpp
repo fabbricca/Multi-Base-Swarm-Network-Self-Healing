@@ -167,17 +167,12 @@ void FloodManager::handleStart(const FloodStartMsg& msg) {
     // Base -> initiator drone.  self_base_id is set by the START path
     // above (drones receive START from the base, pkt.src is the base id).
     //
-    // Only "fully in-coverage" drones should re-initiate the flood.  In
-    // particular, a station-keeping drone that has previously sent
-    // HELP_PROXY hears every base's broadcast START because it is back in
-    // radio range, but its last_ack_rx_s is intentionally frozen so the
-    // controller still treats it as a returned-anchor (hops=2 in NEIGHBOR
-    // broadcasts) -- if we let it re-seed the flood with hop_to_base=1,
-    // the stale-protection branch in getHopsFromBase() then collapses its
-    // reported hops to UINT8_MAX, breaking both the formation outward
-    // attraction and the end-of-sim coverage metrics.  Skip the initiate
-    // for those drones; the genuinely-coverage helpers (last_ack_rx_s
-    // fresh) will seed instead.
+    // Only re-seed the flood if we actually have direct radio reach to
+    // this base; otherwise we'd stamp ourselves as hop=1 and then the
+    // stale-protection branch in getHopsFromBase() would clamp us to
+    // UINT8_MAX as soon as our ACK freshness lapses.  A drone that has
+    // truly returned to coverage will pass the reachability check and
+    // re-seed; the genuinely-out-of-coverage case correctly bails.
     if (is_base_reachable && !is_base_reachable(self_base_id)) {
         return;
     }

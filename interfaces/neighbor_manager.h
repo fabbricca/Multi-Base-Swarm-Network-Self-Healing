@@ -20,6 +20,7 @@ class NeighborManagerInterface {
             uint8_t id,
             PositionInterface* position,
             const std::vector<std::pair<uint8_t, uint8_t>>& per_base_hops,
-            bool returning
+            bool returning,
+            bool station_keeping
         ) = 0;
 };

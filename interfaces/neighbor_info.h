@@ -7,6 +7,10 @@ class NeighborInfoInterface {
         virtual ~NeighborInfoInterface() = default;
         virtual std::vector<double> getPosition() const = 0;
         virtual bool getIsReturning() const = 0;
+        // True when the neighbor has completed its return and is parked
+        // inside coverage.  Helpers use this to detect "no one left to
+        // help" and stand down.
+        virtual bool getIsStationKeeping() const = 0;
 
         // Per-base hop count.  Returns UINT8_MAX when the neighbor has no
         // known path to that base.  Allows a drone to filter/weight its

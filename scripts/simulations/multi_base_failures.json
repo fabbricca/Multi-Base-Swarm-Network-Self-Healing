@@ -1,0 +1,124 @@
+{
+  "defaults": {
+    "params": {
+      "sim_seconds": 180,
+      "max_range_meters": 50.0,
+      "k_att": 0.3,
+      "k_rep": 8.0,
+      "d_safe": 2.0,
+      "v_max": 3.0,
+      "drone_weight_kg": 0.25
+    }
+  },
+  "simulations": [
+    {
+      "_section": "single base, killed mid-sim — leaves every drone with no base at all (the n_higher=0 trigger for the weighted bug)",
+      "name": "single_base_kill",
+      "params": { "sim_seconds": 180 },
+      "base_failures": [
+        { "base": "base1", "at_seconds": 60.0 }
+      ]
+    },
+    {
+      "_section": "two bases on opposite sides — base1 dies first, then base2; window where ALL drones are baseless",
+      "name": "dual_base_kill_cascade",
+      "params": { "sim_seconds": 240, "max_range_meters": 50.0 },
+      "bases": [[-60.0, 0.0, 0.0], [60.0, 0.0, 0.0]],
+      "drones": {
+        "drone1":  [-50.0,  10.0, 0.0],
+        "drone2":  [-50.0, -10.0, 0.0],
+        "drone3":  [-30.0,  15.0, 0.0],
+        "drone4":  [-30.0, -15.0, 0.0],
+        "drone5":  [-70.0,   5.0, 0.0],
+        "drone6":  [-70.0,  -5.0, 0.0],
+        "drone7":  [-80.0,  20.0, 0.0],
+        "drone8":  [-85.0, -10.0, 0.0],
+        "drone9":  [-95.0,   0.0, 0.0],
+        "drone10": [-100.0, 15.0, 0.0],
+        "drone11": [ 50.0,  10.0, 0.0],
+        "drone12": [ 50.0, -10.0, 0.0],
+        "drone13": [ 30.0,  15.0, 0.0],
+        "drone14": [ 30.0, -15.0, 0.0],
+        "drone15": [ 70.0,   5.0, 0.0],
+        "drone16": [ 70.0,  -5.0, 0.0],
+        "drone17": [ 80.0,  20.0, 0.0],
+        "drone18": [ 85.0, -10.0, 0.0],
+        "drone19": [ 95.0,   0.0, 0.0],
+        "drone20": [100.0,  15.0, 0.0]
+      },
+      "base_failures": [
+        { "base": "base1", "at_seconds": 60.0 },
+        { "base": "base2", "at_seconds": 150.0 }
+      ]
+    },
+    {
+      "_section": "two bases overlapping coverage — drones can roam between, then base1 dies and the other absorbs them, then base2 dies",
+      "name": "dual_base_kill_overlap",
+      "params": { "sim_seconds": 240, "max_range_meters": 60.0 },
+      "bases": [[-25.0, 0.0, 0.0], [25.0, 0.0, 0.0]],
+      "drones": {
+        "drone1":  [-15.0,  10.0, 0.0],
+        "drone2":  [-15.0, -10.0, 0.0],
+        "drone3":  [-35.0,  20.0, 0.0],
+        "drone4":  [-35.0, -20.0, 0.0],
+        "drone5":  [-50.0,  10.0, 0.0],
+        "drone6":  [-55.0, -15.0, 0.0],
+        "drone7":  [-65.0,  25.0, 0.0],
+        "drone8":  [-65.0, -25.0, 0.0],
+        "drone9":  [-75.0,   5.0, 0.0],
+        "drone10": [-80.0,  -5.0, 0.0],
+        "drone11": [ 15.0,  10.0, 0.0],
+        "drone12": [ 15.0, -10.0, 0.0],
+        "drone13": [ 35.0,  20.0, 0.0],
+        "drone14": [ 35.0, -20.0, 0.0],
+        "drone15": [ 50.0,  10.0, 0.0],
+        "drone16": [ 55.0, -15.0, 0.0],
+        "drone17": [ 65.0,  25.0, 0.0],
+        "drone18": [ 65.0, -25.0, 0.0],
+        "drone19": [ 75.0,   5.0, 0.0],
+        "drone20": [ 80.0,  -5.0, 0.0]
+      },
+      "base_failures": [
+        { "base": "base1", "at_seconds": 80.0 },
+        { "base": "base2", "at_seconds": 180.0 }
+      ]
+    },
+    {
+      "_section": "Full chaos: dual base + mid-sim drone kills + base kills (the original bug-trigger scenario)",
+      "name": "dual_base_full_chaos",
+      "params": { "sim_seconds": 280, "max_range_meters": 55.0 },
+      "bases": [[-50.0, 0.0, 0.0], [50.0, 0.0, 0.0]],
+      "drones": {
+        "drone1":  [-40.0,   5.0, 0.0],
+        "drone2":  [-40.0,  -5.0, 0.0],
+        "drone3":  [-25.0,  10.0, 0.0],
+        "drone4":  [-25.0, -10.0, 0.0],
+        "drone5":  [-60.0,  10.0, 0.0],
+        "drone6":  [-60.0, -10.0, 0.0],
+        "drone7":  [-75.0,  20.0, 0.0],
+        "drone8":  [-75.0, -20.0, 0.0],
+        "drone9":  [-90.0,   0.0, 0.0],
+        "drone10": [-95.0,  15.0, 0.0],
+        "drone11": [ 40.0,   5.0, 0.0],
+        "drone12": [ 40.0,  -5.0, 0.0],
+        "drone13": [ 25.0,  10.0, 0.0],
+        "drone14": [ 25.0, -10.0, 0.0],
+        "drone15": [ 60.0,  10.0, 0.0],
+        "drone16": [ 60.0, -10.0, 0.0],
+        "drone17": [ 75.0,  20.0, 0.0],
+        "drone18": [ 75.0, -20.0, 0.0],
+        "drone19": [ 90.0,   0.0, 0.0],
+        "drone20": [ 95.0,  15.0, 0.0]
+      },
+      "base_failures": [
+        { "base": "base1", "at_seconds": 70.0 },
+        { "base": "base2", "at_seconds": 200.0 }
+      ],
+      "failures": [
+        { "drone": "drone5",  "at_seconds": 30.0 },
+        { "drone": "drone15", "at_seconds": 100.0 },
+        { "drone": "drone8",  "at_seconds": 150.0 }
+      ]
+    }
+  ]
+}

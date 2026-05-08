@@ -22,7 +22,8 @@ class NeighborManager : public NeighborManagerInterface {
   void sendToNeighbors(uint8_t id,
                        PositionInterface* position,
                        const std::vector<std::pair<uint8_t, uint8_t>>& per_base_hops,
-                       bool returning) override;
+                       bool returning,
+                       bool station_keeping) override;
 
  private:
   struct Entry {

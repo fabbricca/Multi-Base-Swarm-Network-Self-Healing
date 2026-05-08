@@ -6,10 +6,12 @@ NeighborInfo::NeighborInfo(
     uint8_t id,
     const std::vector<std::pair<uint8_t, uint8_t>>& per_base_hops,
     bool returning,
+    bool station_keeping,
     const std::vector<double>& coordinates
 ) :
     neighbor_id(id),
     is_returning(returning),
+    is_station_keeping(station_keeping),
     per_base(per_base_hops),
     position(coordinates)
 { }
@@ -20,6 +22,10 @@ std::vector<double> NeighborInfo::getPosition() const {
 
 bool NeighborInfo::getIsReturning() const {
     return is_returning;
+}
+
+bool NeighborInfo::getIsStationKeeping() const {
+    return is_station_keeping;
 }
 
 uint8_t NeighborInfo::getHopsToBase(uint8_t base_id) const {
@@ -61,7 +67,10 @@ void NeighborInfo::serialize(std::vector<uint8_t>& out_payload) const {
     out_payload.resize(3 + 2 * n + coord_bytes);
 
     out_payload[0] = neighbor_id;
-    out_payload[1] = static_cast<uint8_t>(is_returning ? FLAG_RETURNING : 0);
+    uint8_t flags = 0;
+    if (is_returning)       flags |= FLAG_RETURNING;
+    if (is_station_keeping) flags |= FLAG_STATION_KEEPING;
+    out_payload[1] = flags;
     out_payload[2] = static_cast<uint8_t>(n);
 
     size_t off = 3;
@@ -81,7 +90,8 @@ void NeighborInfo::deserialize(const std::vector<uint8_t>& in_payload) {
     }
 
     neighbor_id = in_payload[0];
-    is_returning = (in_payload[1] & FLAG_RETURNING) != 0;
+    is_returning       = (in_payload[1] & FLAG_RETURNING) != 0;
+    is_station_keeping = (in_payload[1] & FLAG_STATION_KEEPING) != 0;
     const size_t n = in_payload[2];
 
     const size_t header = 3 + 2 * n;

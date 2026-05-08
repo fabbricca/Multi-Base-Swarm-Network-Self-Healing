@@ -326,20 +326,18 @@ void Ns3Drone::dispatchPacket(const ::Packet& pkt) {
 
   // Direct FLOOD from a known base (i.e. a FloodStart/FloodDiscovery with
   // pkt.src == base_id) is proof the base is within one radio hop of us.
-  // Use it to bootstrap last_ack_rx_s so isBaseReachable() can return true
-  // before the first real POS_ACK arrives, breaking the chicken-and-egg
-  // between "pick nearest base" and "send POS_UPDATE to get an ACK".
-  //
-  // Skip the bootstrap once we have latched help_proxy_sent.  After that
-  // point we deliberately keep last_ack_rx_s frozen so a returned, station-
-  // keeping drone keeps reporting flood-derived hops=2 (rather than seeding
-  // a hop=1 flood and tripping the stale-protection branch).  Direct ACKs
-  // still update last_direct_ack_rx_s, which is what the station-keeping
-  // re-arm logic and end-of-sim direct-coverage detection consult.
-  if (pkt.type == ::PacketType::FLOOD && !help_proxy_sent) {
+  // Update both the generic ACK-freshness clock (so the HELP_PROXY-emission
+  // timeout sees we're alive) AND the direct-ACK clock (so isBaseReachableId
+  // -- which the FloodManager consults to decide "should I claim hop=1?"
+  // -- returns true before the first real POS_ACK lands).  This breaks the
+  // chicken-and-egg between "pick nearest base" and "send POS_UPDATE to
+  // get an ACK".
+  if (pkt.type == ::PacketType::FLOOD) {
     auto it = m_base_state.find(pkt.src);
     if (it != m_base_state.end()) {
-      it->second.last_ack_rx_s = ::ns3::Simulator::Now().GetSeconds();
+      const double now_s = ::ns3::Simulator::Now().GetSeconds();
+      it->second.last_ack_rx_s = now_s;
+      it->second.last_direct_ack_rx_s = now_s;
     }
   }
 
@@ -391,28 +389,23 @@ void Ns3Drone::handleCorePacket(const ::Packet& pkt) {
 
       if (is_direct) {
         st.last_direct_ack_rx_s = now_s;
-        // Do NOT refresh last_ack_rx_s here after help_proxy_sent is
-        // latched.  Letting it stay frozen is what allows
-        // FloodManager::getHopsFromBase() to fall through to flood-derived
-        // hops + stale-protection (return UINT8_MAX when flood_hop==1 and
-        // !is_base_reachable), which is what makes a returned, station-
-        // keeping drone advertise itself as an outward "anchor at the
-        // boundary" rather than a hop=1 peer.  Without that distinction,
-        // helpers (also at hop=1) see station-keeping drones as same-hop
-        // peers and skip them in centroid/weighted attraction, collapsing
-        // the formation onto the base.  The !help_proxy_sent branch below
-        // still refreshes last_ack_rx_s for the normal pre-loss path; the
-        // station-keeping re-arm logic uses last_direct_ack_rx_s, so that
-        // remains intact.
       }
 
       if (help_proxy_sent && m_first_ack_after_help_s < 0.0) {
         m_first_ack_after_help_s = now_s;
       }
 
-      if (!help_proxy_sent) {
-        st.last_ack_rx_s = now_s;
-      } else {
+      // A direct ACK is unambiguous proof the base is within one radio hop;
+      // a relayed ACK still proves the chain reached us.  In both cases
+      // refresh last_ack_rx_s so a returning drone that re-enters base
+      // coverage truthfully reports hops=1 (via getHopsFromBase's direct
+      // short-circuit) instead of being stuck at the last flood-derived
+      // value.  Helpers no longer need the old "freeze at hops=2" hack:
+      // ControllerBase::step now auto-deactivates them when their lost
+      // drones are all station-keeping, so a returned drone showing up at
+      // hops=1 doesn't cause the formation to collapse.
+      st.last_ack_rx_s = now_s;
+      if (help_proxy_sent) {
         std::cout << "[RELAYED_ACK_RX] t=" << now_s
                   << "s drone=" << static_cast<int>(m_id)
                   << " seq=" << ack.seq << std::endl;
@@ -707,10 +700,17 @@ bool Ns3Drone::hasDirectBaseCoverage() const {
 }
 
 bool Ns3Drone::isBaseReachableId(uint8_t base_id) const {
+  // FloodManager asks this to decide whether to short-circuit hops to 1
+  // and whether to re-seed floods.  Both questions are about *direct*
+  // radio reach -- a relayed ACK proves a chain exists but says nothing
+  // about being inside the base's coverage circle.  Use the direct-ACK
+  // clock (refreshed on real direct ACKs and on direct FLOOD bootstrap),
+  // not the generic last_ack_rx_s which also counts relayed ACKs.
   auto it = m_base_state.find(base_id);
   if (it == m_base_state.end()) return false;
+  if (it->second.last_direct_ack_rx_s < 0.0) return false;
   const double now_s = ::ns3::Simulator::Now().GetSeconds();
-  return (now_s - it->second.last_ack_rx_s) <= m_ack_timeout_s;
+  return (now_s - it->second.last_direct_ack_rx_s) <= DIRECT_ACK_TIMEOUT_S;
 }
 
 bool Ns3Drone::hasDirectCoverageId(uint8_t base_id) const {

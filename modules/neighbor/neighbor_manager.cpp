@@ -29,7 +29,8 @@ void NeighborManager::onPacketReceived(const ::Packet& pkt) {
 
     auto info = std::make_unique<NeighborInfo>(neighbor_id,
                                                std::vector<std::pair<uint8_t, uint8_t>>{},
-                                               false,
+                                               /*returning=*/false,
+                                               /*station_keeping=*/false,
                                                std::vector<double>{});
     try {
         info->deserialize(pkt.payload);
@@ -65,7 +66,8 @@ void NeighborManager::sendToNeighbors(
     uint8_t id,
     PositionInterface* position,
     const std::vector<std::pair<uint8_t, uint8_t>>& per_base_hops,
-    bool returning
+    bool returning,
+    bool station_keeping
 ) {
     if (!m_communication_manager || !position) {
         return;
@@ -94,7 +96,7 @@ void NeighborManager::sendToNeighbors(
         }
     }
 
-    NeighborInfo info(id, per_base_hops, returning, coords);
+    NeighborInfo info(id, per_base_hops, returning, station_keeping, coords);
 
     ::Packet pkt;
     pkt.type = ::PacketType::NEIGHBOR;
