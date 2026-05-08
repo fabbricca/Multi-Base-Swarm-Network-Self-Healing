@@ -25,6 +25,13 @@ void CentroidController::accumulateAttractive(
     // genuinely lost — bucket it under a sentinel hop above self_hops so it
     // acts as an outward attractor (matches pre-multi-base behavior, which
     // is what creates the helper-stays-at-midpoint equilibrium).
+    //
+    // Station-keeping neighbors report their TRUE hop count (=1 once back
+    // in coverage) but in formation terms they are the outward boundary
+    // anchor: we want helpers (also at hops=1) to settle midway between
+    // the base and the SK ring, not to skip SK as a same-hop peer.  Force
+    // SK neighbors into a sentinel bucket above self_hops to recover the
+    // pre-fix equilibrium without resurrecting the v1 hops=2 lie.
     std::unordered_map<uint8_t, std::vector<std::vector<double>>> hop_groups;
     for (const NeighborInfoInterface* neighbor : neighbors) {
         if (neighbor->getIsReturning()) continue;
@@ -34,6 +41,14 @@ void CentroidController::accumulateAttractive(
         if (nh == UINT8_MAX) {
             if (neighbor->getMinHopsToAnyBase() != UINT8_MAX) continue;
             nh = UINT8_MAX;  // genuinely lost — sentinel "higher than any real hop"
+        }
+        if (neighbor->getIsStationKeeping()) {
+            // SK boundary anchor.  Use a sentinel just above self_hops so
+            // it forms its own bucket (and a separate one from genuinely
+            // lost drones at UINT8_MAX, so the centroids don't merge).
+            const uint8_t sk_sentinel = (self_hops < 254) ? static_cast<uint8_t>(self_hops + 1) : 254;
+            hop_groups[sk_sentinel].push_back(neighbor->getPosition());
+            continue;
         }
         if (nh != self_hops) {
             hop_groups[nh].push_back(neighbor->getPosition());

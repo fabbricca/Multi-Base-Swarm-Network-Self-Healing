@@ -146,39 +146,62 @@ void ControllerBase::step(
     const auto neighbors = neighbor_manager->getNeighbors();
     position->retrieveCurrentPosition();
 
-    // Helper auto-deactivation: count outward neighbors (hops > my_hops or
-    // genuinely lost) that are NOT yet station-keeping.  Returning drones
-    // still count -- they need the relay chain we form during their
-    // return.  Once every drone we were helping has reached direct
-    // coverage and switched to station-keeping (or aged out of our
-    // neighbor list), our relay job is done -- brake and clear
-    // mission_active so a future HELP_PROXY can re-arm us.
-    //
-    // This is the cleanup that lets returned drones truthfully report
-    // hops=1: helpers that would otherwise see them as same-hop peers
-    // (and skip them, collapsing toward the base) are now off-mission and
-    // simply hold position.
+    // Classify outward neighbors before running the formation control law.
+    // We need three buckets so we can pick the right behavior:
+    //   - outward_active   : non-returning, non-SK -- a real relay target
+    //   - outward_returning: in transit home -- skipped by attraction but
+    //                        we must NOT drift onto the base while they
+    //                        traverse our chain
+    //   - outward_sk       : settled at the boundary -- the outward anchor
+    //                        that pins the helper's midpoint equilibrium
+    //                        (centroid/weighted treat them as outward
+    //                        attractors regardless of their hops=1 report)
     //
     // Skip the check during the startup window where we don't yet have a
     // flood-derived hop count -- otherwise we'd deactivate before the
     // first relay chain even forms.
     if (my_hops != UINT8_MAX) {
-        size_t outward_active = 0;
+        size_t outward_active = 0, outward_returning = 0, outward_sk = 0;
         for (const NeighborInfoInterface* n : neighbors) {
-            if (n->getIsStationKeeping()) continue;  // returned and settled
             const uint8_t nh = (nearest_base == UINT8_MAX)
                 ? n->getMinHopsToAnyBase()
                 : n->getHopsToBase(nearest_base);
+            bool is_outward = false;
             if (nh == UINT8_MAX) {
                 // Genuinely lost (no path to any base) -- definitely
                 // someone we should still be helping.  A neighbor attached
                 // to another base's swarm is excluded.
-                if (n->getMinHopsToAnyBase() == UINT8_MAX) ++outward_active;
-                continue;
+                if (n->getMinHopsToAnyBase() == UINT8_MAX) is_outward = true;
+            } else if (nh > my_hops) {
+                is_outward = true;
+            } else if (n->getIsStationKeeping()) {
+                // SK reports its true hops (=1 if back in coverage); for the
+                // purposes of formation control we still want it to act as
+                // an outward boundary anchor.
+                is_outward = true;
             }
-            if (my_hops != UINT8_MAX && nh > my_hops) ++outward_active;
+            if (!is_outward) continue;
+            if (n->getIsStationKeeping())     ++outward_sk;
+            else if (n->getIsReturning())     ++outward_returning;
+            else                               ++outward_active;
         }
-        if (outward_active == 0) {
+
+        if (outward_active == 0 && outward_sk == 0) {
+            if (outward_returning > 0) {
+                // Return phase: every outward drone we're relaying for is
+                // in transit, no boundary anchor is in place yet.  Hold
+                // position so the chain stays intact -- if we let the
+                // attraction logic run (it skips returning drones) the
+                // only attractor would be the base, dragging the helper
+                // inward and collapsing the chain mid-return.
+                m_no_outward_ticks = 0;
+                velocity_actuator->brake();
+                neighbor_manager->sendToNeighbors(self_id, position, my_per_base_hops, /*returning=*/false, /*station_keeping=*/m_station_keeping);
+                return;
+            }
+            // No outward neighbors at all (all SK gone out of range, or
+            // never had any).  Auto-deactivate after a short debounce so a
+            // future HELP_PROXY can re-arm us via Ns3Drone::startMission().
             if (++m_no_outward_ticks >= HELPER_IDLE_DEACTIVATE_TICKS) {
                 mission_active = false;
                 m_no_outward_ticks = 0;

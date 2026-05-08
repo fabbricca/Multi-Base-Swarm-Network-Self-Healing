@@ -33,7 +33,20 @@ void WeightedController::accumulateAttractive(
     // problem because each non-empty hop bucket contributes its own pull
     // regardless of how many other buckets exist.
     // Sentinel-as-higher-hop logic below restores symmetric behavior.
+    // Station-keeping neighbors report their TRUE hop count (=1 once back
+    // in coverage) but in formation terms they are the outward boundary
+    // anchor.  Treat them as strictly-higher-hop so a same-hop helper still
+    // counts them as outward and gets pulled toward the midpoint.  Without
+    // this the helper would skip SK as a same-hop peer, n_higher would
+    // collapse to 0 once all real lost drones reached SK, and F_tot=0 would
+    // freeze the helper wherever it last was (typically at its starting
+    // position, well outside the post-return midpoint equilibrium).
     auto hop_to_our_base = [&](const NeighborInfoInterface* n) -> uint8_t {
+        if (n->getIsStationKeeping()) {
+            // Sentinel just above self_hops -- "outward" without conflating
+            // with the genuinely-lost UINT8_MAX bucket.
+            return (self_hops < 254) ? static_cast<uint8_t>(self_hops + 1) : 254;
+        }
         uint8_t h = (self_base_id == UINT8_MAX)
             ? n->getMinHopsToAnyBase()
             : n->getHopsToBase(self_base_id);
@@ -50,7 +63,8 @@ void WeightedController::accumulateAttractive(
         const uint8_t nh = hop_to_our_base(neighbor);
         // UINT8_MAX from a neighbor still attached to another base means
         // "skip"; UINT8_MAX from a fully lost neighbor means "higher hop".
-        if (nh == UINT8_MAX && neighbor->getMinHopsToAnyBase() != UINT8_MAX) continue;
+        if (nh == UINT8_MAX && !neighbor->getIsStationKeeping()
+            && neighbor->getMinHopsToAnyBase() != UINT8_MAX) continue;
         if (nh < self_hops)      ++n_lower;
         else if (nh > self_hops) ++n_higher;
     }
@@ -58,7 +72,8 @@ void WeightedController::accumulateAttractive(
     for (const NeighborInfoInterface* neighbor : neighbors) {
         if (neighbor->getIsReturning()) continue;
         const uint8_t neighbor_hops = hop_to_our_base(neighbor);
-        if (neighbor_hops == UINT8_MAX && neighbor->getMinHopsToAnyBase() != UINT8_MAX) continue;
+        if (neighbor_hops == UINT8_MAX && !neighbor->getIsStationKeeping()
+            && neighbor->getMinHopsToAnyBase() != UINT8_MAX) continue;
         Vector3D diff = self_position->distanceFromCoords(neighbor->getPosition());
         if (neighbor_hops < self_hops) {
             for (uint32_t i = 0; i < n_higher; ++i) {
