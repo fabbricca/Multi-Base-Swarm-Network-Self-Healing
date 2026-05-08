@@ -20,10 +20,19 @@ void WeightedController::accumulateAttractive(
     // A neighbor with no path to OUR base: if it has a path to some other
     // base, it belongs to that swarm and we skip it.  If it has no path to
     // ANY base, it is genuinely lost — treat it as higher-hop so it acts
-    // as an outward attractor.  Without this, n_higher collapses to 0 when
-    // the only "outward" neighbor is the lost drone, the cross-product
-    // weight zeroes the inward pull, F_tot ≈ 0, and the helper brakes at
-    // the coverage boundary instead of holding the midpoint.
+    // as an outward attractor.
+    //
+    // *** Historical bug (fixed in 76199d4) ***
+    // Pre-fix, lost neighbors (UINT8_MAX) were unconditionally skipped.
+    // Result: a helper at the coverage boundary whose only outward neighbor
+    // was a lost drone would see n_higher = 0; the application loop's
+    // cross-product weighting (base contribution scaled by n_higher)
+    // produced F_tot ≈ 0; the helper braked at the boundary instead of
+    // holding the midpoint -- and the lost drone, with no helper to relay
+    // for it, was never saved.  The centroid controller never had this
+    // problem because each non-empty hop bucket contributes its own pull
+    // regardless of how many other buckets exist.
+    // Sentinel-as-higher-hop logic below restores symmetric behavior.
     auto hop_to_our_base = [&](const NeighborInfoInterface* n) -> uint8_t {
         uint8_t h = (self_base_id == UINT8_MAX)
             ? n->getMinHopsToAnyBase()
