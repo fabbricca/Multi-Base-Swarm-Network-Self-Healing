@@ -281,4 +281,4 @@ This work is inspired by research on virtual spring-damper formation control and
 
 ## License
 
-University of Padua - Advanced Topics in Communication Networks and Systems
+University of Padua - Wireless Networks for Mobile Applications
