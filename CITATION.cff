@@ -1,0 +1,21 @@
+cff-version: 1.2.0
+message: "If you use this software or refer to this work, please cite it as below."
+title: "Multi-Base Swarm Network Self-Healing"
+abstract: >-
+  A decentralized self-healing protocol for drone swarms that autonomously
+  restores base-station connectivity using UWB ranging and multi-hop relay
+  chains, evaluated in simulation against multi-base topologies.
+type: software
+authors:
+  - family-names: "Fabbian"
+    given-names: "Riccardo"
+    affiliation: "University of Padua"
+repository-code: "https://github.com/fabbricca/Multi-Base-Swarm-Network-Self-Healing"
+license: MIT
+keywords:
+  - drone-swarm
+  - self-healing-networks
+  - uwb
+  - multi-hop-relay
+  - wireless-networks
+  - decentralized-protocols
