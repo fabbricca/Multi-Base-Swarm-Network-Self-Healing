@@ -1,0 +1,7 @@
+# The report is documentation, not the project. Without this, linguist counts the
+# LaTeX sources and labels the whole repository "TeX" — which is the first thing a
+# reviewer sees and the last impression you want on a C++ systems project.
+report/**      linguist-documentation
+assets/**      linguist-documentation
+*.tex          linguist-documentation
+*.bib          linguist-documentation
